@@ -92,6 +92,18 @@ ollama run llama3.2:3b
 This command will download the model (about 2 GB) and run a chat instance.
 To exit from the chat interface you can use the `/bye` command.
 
+## Generate the embeddings for the movies dataset
+
+The examples about semantic and hybrid search use the movies dataset stored in `data/scifi_movies.jsonl`. This file does not contains the vector embeddings. You can generate it using the script
+`rag/generate_embedding.py`. This script uses the `llama3.2:3b` model to generate the embeddings
+for the scifi movies reported in the dataset and store the results in a new `scifi_movies_with_embeddings.jsonl` file.
+
+You can run this script using the following command:
+
+```bash
+python -m rag.generate_embedding
+```
+
 ## Copyright
 
 Copyright by [Enrico Zimuel](https://www.zimuel.it/), 2025.
