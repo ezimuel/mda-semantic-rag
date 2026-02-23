@@ -1,6 +1,6 @@
 # MDA: Semantic Search & RAG architectures
 
-This repository contains the source cod of the course "Semantic Search & RAG architectures" for the [Master in Data Analytics](https://master-data-analytics.it/) from [University of Roma Tre](https://www.uniroma3.it/) in Italy.
+This repository contains the source code of the course "Semantic Search & RAG architectures" for the [Master in Data Analytics](https://master-data-analytics.it/) from [University of Roma Tre](https://www.uniroma3.it/) in Italy.
 
 In this course, we introduce the concept of semantic search and RAG architectures.
 
