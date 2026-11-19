@@ -84,7 +84,7 @@ response = es.indices.create(
         "properties": {
             "embedding": {
                 "type": "dense_vector",
-                "dims": 3072
+                "dims": 1024
             },
             "my_text" : {
                 "type" : "text"
@@ -101,7 +101,10 @@ print(json.dumps(response.body, indent=4))
 # Index the chunk in Elasticsearch
 for i, chunk in enumerate(chunks):
     print(f"Indexing chunk: {i}\n")
-    response = ollama.embed(model=model_name, input=chunk)
+    response = ollama.embed(
+        model=os.getenv("EMBEDDING_MODEL"),
+        input=chunk
+    )
     embedding = response["embeddings"][0]
    
     response = es.index(
@@ -115,10 +118,13 @@ for i, chunk in enumerate(chunks):
     print(response)
     
 
-question = "Chi ha vinto il premio nobel nel 2024?"
+question = "Chi ha vinto il premio nobel per la fisica nel 2024?"
 print(f"\nQuestion: {question}")
 
-response = ollama.embed(model=model_name, input=question)
+response = ollama.embed(
+    model=os.getenv("EMBEDDING_MODEL"),
+    input=question
+)
 question_embedding = response["embeddings"][0]
 
 # Semantic search: retrieval the relevant chunks
@@ -152,7 +158,7 @@ prompt = (
 )
 
 response = ollama.chat(
-    model=model_name,
+    model=os.getenv("LLM_MODEL"),
     messages=[{
         'role': 'user',
         'content': prompt

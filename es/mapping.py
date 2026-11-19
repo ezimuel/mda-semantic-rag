@@ -45,7 +45,7 @@ mappings = {
         },
         "embedding": {
             "type": "dense_vector", 
-            "dims": 3072,
+            "dims": 1024,
             "index": True,
             "similarity": "cosine"
         }

@@ -2,9 +2,18 @@
 # Course: Semantic Search and RAG architectures
 # by Enrico Zimuel (https://github.com/ezimuel)
 
+import os
 import json
 import ollama
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+env_path = os.path.join(parent_dir, ".env")
+
+load_dotenv(dotenv_path=env_path)
 input_path="data/scifi_movies.jsonl"
 output_path="data/scifi_movies_with_embeddings.jsonl"
 
@@ -19,7 +28,7 @@ with open(input_path, "r", encoding="utf-8") as fin, open(output_path, "w", enco
 
         doc = json.loads(line)
         response = ollama.embed(
-            model="llama3.2:3b",
+            model=os.getenv("EMBEDDING_MODEL"),
             input=doc["description"]
         )
         if response is None or "embeddings" not in response or len(response['embeddings']) == 0:

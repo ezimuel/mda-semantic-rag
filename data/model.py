@@ -9,7 +9,6 @@ from pydantic import BaseModel
 class Actor(BaseModel):
     name: str
     characterName: Optional[str] = None
-    name: str
 
 class Movie(BaseModel):
     title: str

@@ -28,7 +28,7 @@ except Exception as e:
 
 search_query = "An horror movie about a spaceship"
 response = ollama.embed(
-    model="llama3.2:3b",
+    model=os.getenv("EMBEDDING_MODEL"),
     input=search_query
 )
 embedding = response['embeddings'][0]

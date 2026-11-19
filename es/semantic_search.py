@@ -27,7 +27,7 @@ except Exception as e:
     print(f"Error connecting to Elasticsearch: {e}")
 
 response = ollama.embed(
-    model="llama3.2:3b",
+    model=os.getenv("EMBEDDING_MODEL"),
     input="An horror movie about a spaceship"
 )
 embedding = response['embeddings'][0]

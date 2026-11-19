@@ -7,7 +7,7 @@ In this course, we introduce the concept of semantic search and RAG architecture
 We collected some examples in Python using [Elasticsearch](https://github.com/elastic/elasticsearch) as data storage and
 [Ollama](https://ollama.com/) as tool to run LLM locally.
 
-We tested the examples using [Llama3.2 at 3B](https://ai.meta.com/blog/llama-3-2-connect-2024-vision-edge-mobile-devices/).
+We tested the examples using the embedding [qwen3-embedding:0.6b](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) and the LLM [Llama3.2 at 3B](https://ai.meta.com/blog/llama-3-2-connect-2024-vision-edge-mobile-devices/).
 
 The project contains the followig folders:
 - `es` with the Elasticsearch examples of lexical search (term frequency), semantic search (vector search) and hybrid search.
@@ -94,15 +94,24 @@ To exit from the chat interface you can use the `/bye` command.
 
 ## Generate the embeddings for the movies dataset
 
-The examples about semantic and hybrid search use the movies dataset stored in `data/scifi_movies.jsonl`. This file does not contains the vector embeddings. You can generate it using the script
-`rag/generate_embedding.py`. This script uses the `llama3.2:3b` model to generate the embeddings
-for the scifi movies reported in the dataset and store the results in a new `scifi_movies_with_embeddings.jsonl` file.
-
-You can run this script using the following command:
+In this project we used the `qwen3-embedding:0.6b` embedding model.
+You can download and install it using ollama, as follows:
 
 ```bash
-python -m rag.generate_embedding
+ollama pull qwen3-embedding:0.6b 
 ```
+
+The examples about semantic and hybrid search use the movies dataset stored in `data/scifi_movies.jsonl`. 
+This file does not contains the vector embeddings. You can generate it using the script
+`es/generate_embedding.py` as follows:
+
+```bash
+python -m es.generate_embedding
+```
+
+This script uses the `qwen3-embedding:0.6b` model to generate the embeddings
+for the scifi movies reported in the dataset and store the results in a new `scifi_movies_with_embeddings.jsonl` file.
+
 
 ## Copyright
 

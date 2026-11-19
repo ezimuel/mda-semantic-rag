@@ -7,7 +7,6 @@ import json
 
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch, helpers
-from data.model import Movie, Actor
 
 # Load environment variables from .env file
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +14,12 @@ parent_dir = os.path.dirname(script_dir)
 env_path = os.path.join(parent_dir, ".env")
 
 load_dotenv(dotenv_path=env_path)
+
+input_path="data/scifi_movies_with_embeddings.jsonl"
+if not os.path.isfile(input_path):
+    raise FileNotFoundError(
+        f"{input_path} not found. Execute 'python -m es.generate_embedding' first."
+    )
 
 # Connect to Elasticsearch
 try:
@@ -25,8 +30,6 @@ try:
 except Exception as e:
     print(f"Error connecting to Elasticsearch: {e}")
 
-input_path="data/scifi_movies.jsonl"
-#input_path="data/scifi_movies_with_embeddings.jsonl"
 action = {
     "_op_type": "index",
     "_index": "movies",
@@ -39,13 +42,30 @@ with open(input_path, "r", encoding="utf-8") as fin:
         doc = json.loads(line)
         actions.append(action | doc)
         action["_id"] += 1
-       
-successful_count, error_count = helpers.bulk(
-    client=es,
-    actions=actions,
-    timeout='300s',
-    refresh=True,
-    raise_on_error=False,
-    stats_only=True
-)
-print(f"Indexed {successful_count} documents with {error_count} errors.")
+
+successful_count = 0
+error_count = 0
+total = len(actions)
+
+for processed, (ok, result) in enumerate(
+    helpers.streaming_bulk(
+        client=es,
+        actions=actions,
+        chunk_size=500,
+        timeout="300s",
+        refresh=True,
+        raise_on_error=False,
+    ),
+    start=1,
+):
+    if ok:
+        successful_count += 1
+    else:
+        error_count += 1
+
+    if processed % 500 == 0 or processed == total:
+        print(
+            f"Processed {processed}/{total} documents "
+            f"({successful_count} indexed, {error_count} errors)",
+            flush=True,
+        )
