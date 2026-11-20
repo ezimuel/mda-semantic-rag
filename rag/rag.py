@@ -134,8 +134,8 @@ response = es.search(
     knn={
         "field": "embedding",
         "query_vector": question_embedding,
-        "k": 10,
-        "num_candidates": 100
+        "k": 5,
+        "num_candidates": 10
     },
     fields=[
         "my_text",
