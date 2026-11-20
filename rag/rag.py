@@ -6,13 +6,13 @@ import re
 import os
 import json
 import ollama
+
 from ollama import Options
 from pypdf import PdfReader
 from dotenv import load_dotenv
 from elasticsearch import Elasticsearch
 
-index_name = "rag-example"
-model_name = "llama3.2:3b"
+INDEX_NAME = "rag-example"
 
 # Load environment variables from .env file
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -74,12 +74,12 @@ chunks = split_text_by_chunks(text, 1000, 0)
 
 # Create the index in Elasticsearch with dense_vector type
 
-if es.indices.exists(index=index_name):
-    es.indices.delete(index=index_name)
+if es.indices.exists(index=INDEX_NAME):
+    es.indices.delete(index=INDEX_NAME)
 
 # Defining the mapping
 response = es.indices.create(
-    index=index_name, 
+    index=INDEX_NAME, 
     mappings={
         "properties": {
             "embedding": {
@@ -108,7 +108,7 @@ for i, chunk in enumerate(chunks):
     embedding = response["embeddings"][0]
    
     response = es.index(
-        index=index_name,
+        index=INDEX_NAME,
         document= {
             "embedding" : embedding,
             "my_text" : chunk,
@@ -129,7 +129,7 @@ question_embedding = response["embeddings"][0]
 
 # Semantic search: retrieval the relevant chunks
 response = es.search(
-    index=index_name,
+    index=INDEX_NAME,
     filter_path="hits.hits",
     knn={
         "field": "embedding",
