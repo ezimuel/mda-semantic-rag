@@ -112,6 +112,109 @@ python -m es.generate_embedding
 This script uses the `qwen3-embedding:0.6b` model to generate the embeddings
 for the scifi movies reported in the dataset and store the results in a new `scifi_movies_with_embeddings.jsonl` file.
 
+## Using Elasticsearch in Python
+
+The `es` folder contains small examples using the Elasticsearch Python client.
+Run the commands from the repository root, with the virtual environment activated
+and Elasticsearch and Ollama running.
+
+| Example | Description |
+| --- | --- |
+| `es/mapping.py` | Creates the `movies` index with movie metadata, nested actors, and a 1024-dimensional vector field using cosine similarity. |
+| `es/embedding.py` | Generates an embedding for a sample sentence using Ollama and prints its dimensions and first values. |
+| `es/generate_embedding.py` | Generates embeddings for movie descriptions and writes `data/scifi_movies_with_embeddings.jsonl`. |
+| `es/bulk.py` | Loads the movies and their embeddings into Elasticsearch in batches, reporting indexing progress and errors. |
+| `es/index.py` | Indexes a single example movie, without generating an embedding. |
+| `es/get.py`, `es/update.py`, `es/delete.py` | Retrieve, update, or delete the movie with document ID `717`. |
+| `es/search.py` | Performs lexical search on movie descriptions using a `match` query. |
+| `es/fuzzy_search.py` | Demonstrates fuzzy matching with a misspelled search term. |
+| `es/semantic_search.py` | Embeds a question and uses k-nearest-neighbor (kNN) vector search to find similar movie descriptions. |
+| `es/hybrid_search.py` | Combines lexical and vector search using Reciprocal Rank Fusion (RRF). |
+| `es/delete_index.py` | Deletes the entire `movies` index after asking for confirmation. |
+
+To prepare the movies index, create its mapping, generate the embeddings
+(if not already generated), and load the dataset:
+
+```bash
+python -m es.mapping
+python -m es.generate_embedding
+python -m es.bulk
+```
+
+Run `es.mapping` only when the `movies` index does not already exist.
+Use the same `EMBEDDING_MODEL` for indexing and searching; its output must match
+the mapping's 1024 dimensions.
+
+You can then compare the search approaches:
+
+```bash
+python -m es.search
+python -m es.fuzzy_search
+python -m es.semantic_search
+python -m es.hybrid_search
+```
+
+The queries and example document IDs are defined directly in these scripts.
+The update and delete examples modify existing data, so use a course/demo index.
+
+## Classic RAG
+
+[`rag/rag.py`](rag/rag.py) demonstrates a fixed retrieval-augmented generation
+pipeline using `data/nobel_prize_physics_2024.pdf`:
+
+1. Extract the PDF text and split it into chunks of approximately 1000 characters.
+2. Generate embeddings with Ollama and store the chunks in the separate
+   `rag-example` index.
+3. Embed the predefined question about the 2024 Nobel Prize in Physics and
+   retrieve the five nearest chunks using Elasticsearch vector search.
+4. Send the context and question to the Ollama language model and print its answer.
+
+Set `EMBEDDING_MODEL=qwen3-embedding:0.6b` and `LLM_MODEL=llama3.2:3b` in `.env`,
+and run:
+
+```bash
+python -m rag.rag
+```
+
+**Notes:** The script deletes and recreates `rag-example` on every run.
+Currently, `context = text` replaces the retrieved chunks with the full PDF text
+before generation. Remove that assignment to use only the retrieved context
+in the final prompt.
+
+## Agentic RAG
+
+[`rag/agentic.py`](rag/agentic.py) uses Ollama's native tool calling to let the
+language model choose how to query the existing `movies` index. Unlike the
+fixed pipeline above, the agent can call tools, inspect their results, and make
+another request before answering.
+
+The example exposes two read-only tools:
+
+- **`search_movies`** embeds a natural-language query and retrieves the five
+  nearest movies using vector search, for recommendations and movie details.
+- **`count_movies`** counts matching movies across the entire index, optionally
+  filtering by an inclusive publication-year range and topic keywords. With
+  `year_order="asc"` or `"desc"`, it also returns the oldest or latest movies,
+  with a configurable `limit` (default 1, maximum 20).
+
+Python executes the requested tools and sends their JSON results back to the
+model. The loop stops when the model answers or after five model turns.
+
+Prepare the movies index as described above, set `LLM_MODEL=llama3.2:3b` in
+`.env`, and keep `EMBEDDING_MODEL` consistent with the indexed movie embeddings.
+For example:
+
+```bash
+python -m rag.agentic "Suggest movies about space exploration"
+python -m rag.agentic "How many movies are in the index?"
+python -m rag.agentic "How many movies from 1980 are in the index?"
+python -m rag.agentic "How many movies from 1970 to 1990 mention UFOs?"
+python -m rag.agentic "What are the five latest movies in the index?"
+```
+
+Topic counts use lexical matching on titles and descriptions, not exhaustive
+semantic matching. Oldest/latest refers to publication year, not indexing date;
+movies published in the same year are tied.
 
 ## Copyright
 
@@ -122,6 +225,5 @@ Copyright by [Enrico Zimuel](https://www.zimuel.it/), 2025.
 
 The source code in this repository are licensed under the Creative Commons 
 [Attribution–NonCommercial–ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en) License.
-
 
 
