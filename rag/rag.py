@@ -118,7 +118,7 @@ for i, chunk in enumerate(chunks):
     print(response)
     
 
-question = "Chi ha vinto il premio nobel per la fisica nel 2024?"
+question = "Who won the Nobel Prize in Physics in 2024?"
 print(f"\nQuestion: {question}")
 
 response = ollama.embed(
