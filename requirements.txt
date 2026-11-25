@@ -10,6 +10,7 @@ httpcore==1.0.9
 httpx==0.28.1
 idna==3.11
 ollama==0.6.1
+networkx==3.6.1
 pdfreader==0.1.15
 pillow==12.0.0
 pycryptodome==3.23.0

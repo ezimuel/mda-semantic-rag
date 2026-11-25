@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GraphRAG explorer</title>
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px system-ui, sans-serif; color: #1e293b; background: #f8fafc; }
+    header { padding: 14px 20px; border-bottom: 1px solid #cbd5e1; }
+    h1 { margin: 0 0 10px; font-size: 21px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 15px; margin-bottom: 6px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button, input, select { font: inherit; max-width: 100%; }
+    button, select, input[type="search"] { padding: 6px 10px; }
+    button { cursor: pointer; }
+    #status { margin: 10px 0 0; font-size: 13px; }
+    main { display: grid; grid-template-columns: 1fr 340px; height: calc(100dvh - 155px); min-height: 420px; }
+    #network { min-width: 0; height: 100%; background: white; }
+    aside { padding: 16px; overflow: auto; border-left: 1px solid #cbd5e1; }
+    #legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 16px; font-size: 13px; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; background: #e2e8f0; padding: 10px; }
+    blockquote { margin: 8px 0; padding-left: 10px; border-left: 3px solid #94a3b8; white-space: pre-wrap; }
+    #details { overflow-wrap: anywhere; }
+    .connection { display: block; text-align: left; margin: 6px 0; width: 100%; }
+    .hint { color: #64748b; font-size: 13px; }
+    @media (max-width: 750px) {
+      main { grid-template-columns: 1fr; height: auto; }
+      #network { height: 60dvh; min-height: 350px; }
+      aside { border-left: 0; border-top: 1px solid #cbd5e1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>GraphRAG explorer</h1>
+    <div class="toolbar">
+      <label>Graph JSON <input id="file" type="file" accept=".json,application/json"></label>
+      <input id="search" type="search" placeholder="Search entities…" aria-label="Search entities" disabled>
+      <select id="matches" aria-label="Matching entities" disabled><option>Choose an entity</option></select>
+      <button id="zoom-in" aria-label="Zoom in">+</button>
+      <button id="zoom-out" aria-label="Zoom out">−</button>
+      <button id="fit">Fit graph</button>
+      <label><input id="labels" type="checkbox" checked> Relation labels</label>
+    </div>
+    <p id="status" role="status">Open a graph JSON file to begin.</p>
+  </header>
+  <main>
+    <div id="network" aria-label="Interactive knowledge graph"></div>
+    <aside>
+      <div id="legend"></div>
+      <p class="hint">Scroll or pinch to zoom. Drag the background to pan, or drag an entity to move it.
+        Click an entity or arrow to inspect it. Search to jump to an entity.</p>
+      <div id="details"><h2>Graph information</h2><p>No graph loaded.</p></div>
+    </aside>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const colors = {
+      Movie: "#60a5fa", Person: "#fbbf24", Character: "#c084fc",
+      Theme: "#4ade80", Place: "#fb923c", Organization: "#f472b6"
+    };
+    let network, graph, nodes = new Map(), edges = [], incident = new Map();
+    let loading = 0;
+
+    // Graph content is untrusted: render values as text, never as HTML.
+    function element(tag, text, parent) {
+      const item = document.createElement(tag);
+      if (text !== undefined) item.textContent = text;
+      if (parent) parent.append(item);
+      return item;
+    }
+
+    function properties(parent, value) {
+      element("pre", JSON.stringify(value, null, 2), parent);
+    }
+
+    function heading(title) {
+      $("details").replaceChildren();
+      element("h2", title, $("details"));
+      return $("details");
+    }
+
+    function movieFor(node) {
+      return typeof node.id === "string" && node.id.startsWith("movie:")
+        ? graph.graph?.movies?.[node.id.slice(6)] : undefined;
+    }
+
+    function showGraph() {
+      const panel = heading("Graph information");
+      element("p", `${nodes.size} entities · ${edges.length} relations`, panel);
+      const { movies, ...metadata } = graph.graph || {};
+      properties(panel, metadata);
+      if (metadata.limited) element("p", "This graph was built from a limited index sample.", panel);
+    }
+
+    function focusNode(id) {
+      network.selectNodes([id]);
+      network.focus(id, { scale: 1.3, animation: true });
+      showNode(id);
+    }
+
+    function showNode(id) {
+      const node = nodes.get(id);
+      const panel = heading(node.label || String(id));
+      properties(panel, node);
+      const movie = movieFor(node);
+      if (movie) {
+        element("h3", "Movie metadata", panel);
+        properties(panel, movie);
+      }
+      const connections = incident.get(id);
+      element("h3", `Relations (${connections.length})`, panel);
+      for (const edge of connections) {
+        const other = edge.source === id ? edge.target : edge.source;
+        const label = `${nodes.get(edge.source).label} → ${edge.relation || edge.key || "RELATED_TO"} → ${nodes.get(edge.target).label}`;
+        const button = element("button", label, panel);
+        button.className = "connection";
+        button.onclick = () => {
+          network.selectEdges([edge._id]);
+          showEdge(edge._id);
+        };
+        const jump = element("button", `Go to ${nodes.get(other).label}`, panel);
+        jump.onclick = () => focusNode(other);
+      }
+    }
+
+    function showEdge(id) {
+      const edge = edges[id];
+      const panel = heading(edge.relation || edge.key || "Relation");
+      for (const [label, nodeId] of [["From", edge.source], ["To", edge.target]]) {
+        const button = element("button", `${label}: ${nodes.get(nodeId).label}`, panel);
+        button.className = "connection";
+        button.onclick = () => focusNode(nodeId);
+      }
+      const { _id, sources, ...attributes } = edge;
+      properties(panel, attributes);
+      element("h3", "Sources and evidence", panel);
+      if (!sources || !Object.keys(sources).length) element("p", "No source evidence recorded.", panel);
+      for (const [movieId, evidence] of Object.entries(sources || {})) {
+        const movie = graph.graph?.movies?.[movieId];
+        element("h3", movie ? `${movie.title} (${movie.datePublished || "unknown date"})` : movieId, panel);
+        element("p", `Movie ID: ${movieId}`, panel);
+        element("blockquote", typeof evidence === "string" ? evidence : JSON.stringify(evidence), panel);
+        if (movie) properties(panel, movie);
+      }
+    }
+
+    function updateMatches() {
+      const query = $("search").value.trim().toLocaleLowerCase();
+      const matches = [...nodes.values()].filter(node =>
+        `${node.label} ${node.type} ${node.id}`.toLocaleLowerCase().includes(query));
+      $("matches").replaceChildren(new Option(`Choose an entity (${matches.length} matches)`, ""));
+      // JSON preserves the distinction between string and numeric node IDs.
+      for (const node of matches.slice(0, 200)) {
+        $("matches").add(new Option(`${node.label} [${node.type || "Entity"}] — ${node.id}`, JSON.stringify(node.id)));
+      }
+    }
+
+    function loadGraph(data, name) {
+      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+        throw new Error("Expected a NetworkX node-link JSON with nodes and edges arrays.");
+      }
+      const nextNodes = new Map();
+      for (const node of data.nodes) {
+        if (!node || !["string", "number"].includes(typeof node.id) || nextNodes.has(node.id)) {
+          throw new Error("Each entity must have a unique string or numeric ID.");
+        }
+        nextNodes.set(node.id, { ...node, label: String(node.label ?? node.id) });
+      }
+      for (const edge of data.edges) {
+        if (!edge || !nextNodes.has(edge.source) || !nextNodes.has(edge.target)) {
+          throw new Error("A relation references an entity that is missing from the graph.");
+        }
+      }
+      if (network) network.destroy();
+      graph = data;
+      nodes = nextNodes;
+      edges = data.edges.map((edge, index) => ({ ...edge, _id: index }));
+      incident = new Map([...nodes.keys()].map(id => [id, []]));
+      for (const edge of edges) {
+        incident.get(edge.source).push(edge);
+        if (edge.target !== edge.source) incident.get(edge.target).push(edge);
+      }
+      network = new vis.Network($("network"), {
+        nodes: [...nodes.values()].map(node => ({
+          id: node.id, label: node.label, color: colors[node.type] || "#94a3b8"
+        })),
+        edges: edges.map(edge => ({
+          id: edge._id, from: edge.source, to: edge.target,
+          label: String(edge.relation || edge.key || "RELATED_TO")
+        }))
+      }, {
+        nodes: { shape: "dot", size: 14, font: { size: 14 } },
+        edges: {
+          arrows: "to", font: { size: $("labels").checked ? 11 : 0, align: "middle" },
+          color: { color: "#94a3b8", highlight: "#2563eb" },
+          smooth: { enabled: true, type: "dynamic" }
+        },
+        interaction: { hover: true, navigationButtons: false, keyboard: true },
+        physics: { stabilization: { iterations: 200 }, barnesHut: { gravitationalConstant: -5000 } }
+      });
+      network.once("stabilizationIterationsDone", () => {
+        network.setOptions({ physics: { enabled: false } });
+        network.fit();
+      });
+      network.on("click", event => {
+        if (event.nodes.length) showNode(event.nodes[0]);
+        else if (event.edges.length) showEdge(event.edges[0]);
+        else showGraph();
+      });
+      $("legend").replaceChildren();
+      for (const type of new Set([...nodes.values()].map(node => node.type || "Entity"))) {
+        const label = element("span", undefined, $("legend"));
+        const dot = element("span", undefined, label);
+        dot.className = "dot";
+        dot.style.background = colors[type] || "#94a3b8";
+        label.append(document.createTextNode(type));
+      }
+      $("search").disabled = $("matches").disabled = false;
+      $("search").value = "";
+      updateMatches();
+      showGraph();
+      $("status").textContent = `${name}: ${nodes.size} entities, ${edges.length} relations.`;
+    }
+
+    $("file").onchange = async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const request = ++loading;
+      try {
+        const data = JSON.parse(await file.text());
+        if (request === loading) loadGraph(data, file.name);
+      } catch (error) {
+        if (request === loading) $("status").textContent = `Cannot load graph: ${error.message}`;
+      }
+    };
+    $("search").oninput = updateMatches;
+    $("matches").onchange = () => {
+      if ($("matches").value !== "") focusNode(JSON.parse($("matches").value));
+    };
+    $("zoom-in").onclick = () => network?.moveTo({ scale: network.getScale() * 1.3 });
+    $("zoom-out").onclick = () => network?.moveTo({ scale: network.getScale() / 1.3 });
+    $("fit").onclick = () => network?.fit({ animation: true });
+    $("labels").onchange = () => network?.setOptions({
+      edges: { font: { size: $("labels").checked ? 11 : 0 } }
+    });
+
+    async function start() {
+      if (!window.vis) {
+        $("status").textContent = "Could not load vis-network. An internet connection is needed for the visualization library; reload to retry.";
+        return;
+      }
+      if (location.protocol === "file:") return;
+      const request = loading;
+      try {
+        const response = await fetch("../data/movies_graph.json");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (request === loading) loadGraph(data, "data/movies_graph.json");
+      } catch (error) {
+        if (request === loading) $("status").textContent = `Default cache unavailable (${error.message}). Choose a graph JSON file above.`;
+      }
+    }
+    start();
+  </script>
+</body>
+</html>

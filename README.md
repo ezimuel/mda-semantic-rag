@@ -216,6 +216,72 @@ Topic counts use lexical matching on titles and descriptions, not exhaustive
 semantic matching. Oldest/latest refers to publication year, not indexing date;
 movies published in the same year are tied.
 
+## GraphRAG
+
+[`rag/graph.py`](rag/graph.py) builds an in-memory NetworkX knowledge graph from
+the existing `movies` index. It reads movie metadata (without embeddings), adds
+cast/director links, and uses `LLM_MODEL` from `.env` to extract additional
+entities and relationships from descriptions. Every relation retains its
+source movie and evidence. The script only reads Elasticsearch.
+
+Prepare the index as described above, install the requirements, and keep Ollama
+running. The first run calls the LLM once per movie, so building the complete
+graph can take a while:
+
+```bash
+python -m rag.graph --build-only
+python -m rag.graph "Which movies share actors with Alien?"
+python -m rag.graph "Who directed other movies starring actors from Alien?" --hops 3
+```
+
+The graph is saved as inspectable JSON in `data/movies_graph.json`. Later runs
+load it without connecting to Elasticsearch or repeating extraction. Use
+`--rebuild` after changing the dataset, extraction prompt, or model.
+For a quick extraction demo, use a separate cache:
+
+```bash
+python -m rag.graph --limit 10 --graph data/demo_graph.json --build-only
+```
+
+A sample may not include Alien or enough connected movies for these questions.
+`--limit` applies only when building; loading a cache always uses its stored graph.
+
+Retrieval extracts entities from the question, matches normalized node names
+(with conservative fuzzy matching), and traverses up to three hops in either
+direction. For example, `Alien -> actor <- another movie -> director` supports
+a multi-hop answer while preserving the direction of each original fact.
+Retrieved facts are printed before the LLM generates an answer with source
+citations. This example deliberately uses graph-only retrieval: no embedding
+model, vector database extension, or GraphRAG framework is required.
+
+For simplicity, traversal is capped at 100 nodes and 120 facts, with up to
+eight question anchors. Answers are not exhaustive counts or lists. Extraction
+can miss or misinterpret facts even when a supporting quote exists; the dataset
+itself can also contain errors. Name normalization does not resolve aliases,
+homonymous people/characters, or ambiguous references to movie remakes.
+This is local graph traversal, not community-based GraphRAG summarization.
+
+### Visualize the graph
+
+Open [`rag/graph.html`](rag/graph.html) in a browser and choose
+`data/movies_graph.json` (or a custom graph cache) using the file picker.
+Alternatively, serve the repository root:
+
+```bash
+python -m http.server 8000 --bind 127.0.0.1
+```
+
+Visit <http://localhost:8000/rag/graph.html> to load the default cache automatically.
+Scroll/pinch to zoom, drag to pan, and search to jump to an entity. Click a node
+to see its attributes, movie metadata and connections; click a relation to see
+its direction, source movies and evidence. Use **Fit graph** to reset the view
+and toggle relation labels to reduce clutter.
+
+The viewer is a single HTML file with no build step or backend dependencies.
+It loads the pinned vis-network library from a CDN (internet required); graph
+data stays in your browser. Elasticsearch and Ollama are not needed to view an
+existing cache.
+
 ## Copyright
 
 Copyright by [Enrico Zimuel](https://www.zimuel.it/), 2025.
@@ -225,5 +291,3 @@ Copyright by [Enrico Zimuel](https://www.zimuel.it/), 2025.
 
 The source code in this repository are licensed under the Creative Commons 
 [Attribution–NonCommercial–ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en) License.
-
-

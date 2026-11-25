@@ -2,3 +2,6 @@
 .venv/
 __pycache__/
 data/scifi_movies_with_embeddings.jsonl
+data/movies_graph.json
+data/movies_graph.json.tmp
+data/demo_graph.json
