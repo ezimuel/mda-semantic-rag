@@ -282,6 +282,10 @@ It loads the pinned vis-network library from a CDN (internet required); graph
 data stays in your browser. Elasticsearch and Ollama are not needed to view an
 existing cache.
 
+Here is reported a screenshot of the UI with a graph of 10 movies from the scifi archive.
+
+![screenshot](./screenshot.png)
+
 ## Copyright
 
 Copyright by [Enrico Zimuel](https://www.zimuel.it/), 2025.
